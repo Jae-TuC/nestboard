@@ -4,7 +4,7 @@
 /build
 
 .agents/*
-.cloud/*
+.claude/*
 .windsurf/*
 
 # Logs
