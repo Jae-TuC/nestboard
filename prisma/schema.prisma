@@ -1,0 +1,303 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum NotificationType {
+  WORKSPACE_INVITATION
+  MEMBER_ADDED
+  MEMBER_REMOVED
+  MEMBER_ROLE_UPDATED
+
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  PROJECT_DELETED
+
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_ASSIGNED
+  TASK_UNASSIGNED
+  TASK_STATUS_UPDATED
+  TASK_COMPLETED
+  TASK_DUE_SOON
+
+  SYSTEM
+}
+
+model User {
+  id String @id @default(uuid())
+
+  firstName String
+  lastName  String
+  email     String @unique
+  password  String
+
+  avatar String?
+
+  isVerified Boolean? @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  memberships   Membership[]
+  tasksCreated  Task[]         @relation("TaskCreator")
+  tasksAssigned Task[]         @relation("TaskAssignee")
+  workspaces    Workspace[]    @relation("WorkspaceCreator")
+  invitations   Invitation[]   @relation("InvitationSender")
+  projects      Project[]      @relation("ProjectCreator")
+  // Notifications received by this user
+  notifications Notification[] @relation("NotificationRecipient")
+
+  // Notifications triggered by this user
+  triggeredNotifications Notification[] @relation("NotificationActor")
+
+  attachmentsUploaded Attachment[] @relation("AttachmentUploader")
+
+  // OTPs associated with this user
+  otps Otp[]
+}
+
+model Workspace {
+  id String @id @default(uuid())
+
+  name        String
+  slug        String  @unique
+  description String?
+
+  createdById String
+  createdBy   User   @relation("WorkspaceCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members       Membership[]
+  projects      Project[]
+  invitations   Invitation[]
+  notifications Notification[]
+}
+
+model Membership {
+  id String @id @default(uuid())
+
+  workspaceId String
+  userId      String
+
+  role Role @default(MEMBER)
+
+  joinedDate DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([workspaceId, userId])
+}
+
+model Invitation {
+  id String @id @default(uuid())
+
+  email       String
+  workspaceId String
+  invitedById String
+
+  role   Role             @default(MEMBER)
+  status InvitationStatus @default(PENDING)
+
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  invitedBy User @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([workspaceId])
+}
+
+model Project {
+  id String @id @default(uuid())
+
+  name        String
+  description String?
+
+  workspaceId String
+  createdById String
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("ProjectCreator", fields: [createdById], references: [id])
+
+  tasks         Task[]
+  notifications Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Task {
+  id String @id @default(uuid())
+
+  title       String
+  description String?
+
+  status   TaskStatus   @default(TODO)
+  priority TaskPriority @default(MEDIUM)
+
+  position Int @default(0)
+
+  dueDate DateTime?
+
+  projectId String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  creatorId String
+
+  creator User @relation("TaskCreator", fields: [creatorId], references: [id])
+
+  assigneeId String?
+
+  assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  // Task attachments
+  attachments Attachment[]
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  notifications Notification[]
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  type NotificationType
+
+  title   String
+  message String
+
+  isRead Boolean @default(false)
+
+  // User receiving the notification
+  userId String
+  user   User   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+
+  // User who caused the notification
+  actorId String?
+  actor   User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  // Related workspace
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Related project
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Related task
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([actorId])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+enum OtpType {
+  ACCOUNT_VERIFICATION
+  PASSWORD_RESET
+}
+
+model Otp {
+  id        String   @id @default(uuid())
+  code      String
+  type      OtpType
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Relationship to the User
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+}
+
+model Attachment {
+  id String @id @default(uuid())
+
+  name String
+
+  url String
+
+  // Cloudinary public ID
+  publicId String
+
+  // Example: image/png, application/pdf
+  mimeType String?
+
+  // File size in bytes
+  size Int?
+
+  // Optional Cloudinary resource type
+  resourceType String? @default("image")
+
+  taskId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  uploadedById String
+
+  uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([uploadedById])
+}
