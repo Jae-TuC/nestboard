@@ -3,6 +3,10 @@
 /node_modules
 /build
 
+.agents/*
+.cloud/*
+.windsurf/*
+
 # Logs
 logs
 *.log
