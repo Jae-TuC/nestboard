@@ -41,3 +41,19 @@ file attachments, and OTP-based account security.
 | File storage | Cloudinary |
 | Runtime | Node.js |
 
+## Environment Variables
+
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/nestboard?schema=public"
+
+# Auth
+JWT_SECRET="your-secret-key"
+JWT_EXPIRES_IN="7d"
+
+# Cloudinary (task attachments)
+CLOUDINARY_CLOUD_NAME="your-cloud-name"
+CLOUDINARY_API_KEY="your-api-key"
+CLOUDINARY_API_SECRET="your-api-secret"
+
+# App
+PORT=3000
